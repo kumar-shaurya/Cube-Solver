@@ -102,12 +102,11 @@ def invert_sequence(seq):
 def solve():
     data = request.json
     scramble_sequence = data.get('scramble', '')
-    cube_string = data.get('cube_string', '') # NEW: Accepts physical colors
+    cube_string = data.get('cube_string', '') 
     
     try:
         if cube_string:
             print(f"\n[ESP32] Physical Cube String received.")
-            # Use Kociemba to translate physical colors into mathematical moves
             try:
                 kociemba_solution = kociemba.solve(cube_string)
                 scramble_sequence = invert_sequence(kociemba_solution)
@@ -117,16 +116,14 @@ def solve():
         print(f"[ESP32] Target Scramble: {scramble_sequence}")
         scrambled_state = apply_moves_to_state(V0, scramble_sequence)
         
-        # --- LOWERED BEAM SIZE FOR SPEED ---
-        # B=4096 (Much faster web responses, less chance of timeout)
         result = searcher.get_solution(scrambled_state, B=4096, num_steps=200, num_attempts=1)
         moves_indices = result[0]
         
         if moves_indices is not None:
-            solution_moves = [move_names[i] for i in moves_indices.tolist()]
-            solution_str = " ".join(solution_moves)
+            solution_str = " ".join([move_names[i] for i in moves_indices.tolist()])
             print(f"[Model] Solution: {solution_str}")
-            return jsonify({'solution': solution_str}), 200
+            # FIX: We now return the scramble sequence back to the ESP32!
+            return jsonify({'solution': solution_str, 'scramble': scramble_sequence}), 200
         else:
             return jsonify({'error': 'Model failed to find a solution.'}), 400
             
