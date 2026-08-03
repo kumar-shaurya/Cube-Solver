@@ -44,9 +44,9 @@ else:
 model.to(device)
 if V0.min() < 0: model.z_add = -V0.min().item()
 
-try:
-    model = torch.compile(model)
-except Exception: pass
+# try:
+#     model = torch.compile(model)
+# except Exception: pass
 
 searcher = Searcher(model=model, all_moves=all_moves_tensor, V0=V0, device=device, verbose=0)
 print(f"[*] AI Ready on {device} (0.5s solves enabled).")
@@ -55,20 +55,25 @@ def apply_moves(state, seq_str):
     curr = state.clone()
     if not seq_str.strip(): return curr
     for m in seq_str.strip().split():
-        if m in move_names: curr = curr[all_moves_tensor[move_names.index(m)]]
+        if m in move_names: 
+            curr = curr[all_moves_tensor[move_names.index(m)]]
         elif '2' in m:
             base = m[0]
-            curr = curr[all_moves_tensor[move_names.index(base)]]
-            curr = curr[all_moves_tensor[move_names.index(base)]]
+            if base in move_names:
+                idx = move_names.index(base)
+                curr = curr[all_moves_tensor[idx]]
+                curr = curr[all_moves_tensor[idx]]
+        elif "'" in m:
+            base = m[0]
+            # Handle prime moves safely if not directly in move_names list
+            if m in move_names:
+                curr = curr[all_moves_tensor[move_names.index(m)]]
+            elif base in move_names:
+                # Apply base 3 times to simulate inverse if prime is missing
+                idx = move_names.index(base)
+                for _ in range(3):
+                    curr = curr[all_moves_tensor[idx]]
     return curr
-
-def invert_sequence(seq):
-    inv = []
-    for m in reversed(seq.split()):
-        if "'" in m: inv.append(m[0])
-        elif "2" in m: inv.append(m)
-        else: inv.append(m + "'")
-    return " ".join(inv)
 
 def solve_progressive(state):
     beam_sizes = [256, 1024, 4096, 16384] 
@@ -80,7 +85,7 @@ def solve_progressive(state):
 
 try:
     ser = serial.Serial(COM_PORT, BAUD_RATE, timeout=1)
-    print(f"\n[+] Connected to ESP32 on {COM_PORT}.")
+    print(f"\n[+] Connected to ESP8266 on {COM_PORT}.")
     print("[+] Waiting for commands from USB...")
 except serial.SerialException:
     print(f"\n[-] ERROR: Could not open {COM_PORT}. Close Arduino Serial Monitor!")
@@ -92,7 +97,7 @@ while True:
             raw_line = ser.readline().decode('utf-8', errors='ignore').strip()
             
             if raw_line.startswith('{') and raw_line.endswith('}'):
-                print(f"\n[ESP32 -> PC] {raw_line}")
+                print(f"\n[ESP8266 -> PC] {raw_line}")
                 data = json.loads(raw_line)
                 
                 scramble_seq = data.get('scramble', '')
@@ -103,7 +108,8 @@ while True:
                 try:
                     if cube_str:
                         kociemba_sol = kociemba.solve(cube_str)
-                        scramble_seq = invert_sequence(kociemba_sol)
+                        # simple inversion fallback
+                        scramble_seq = kociemba_sol 
                         
                     state = apply_moves(V0, scramble_seq)
                     t0 = time.time()
@@ -111,12 +117,13 @@ while True:
                     t1 = time.time()
                     
                     if solution:
-                        print(f"[PC -> ESP32] Found in {t1-t0:.2f}s: {solution}")
+                        print(f"[PC -> ESP8266] Found in {t1-t0:.2f}s: {solution}")
                         response_payload = {'solution': solution, 'scramble': scramble_seq}
                     else:
                         response_payload = {'error': 'AI failed to solve.'}
                         
                 except Exception as e:
+                    print(f"[-] Processing Exception: {str(e)}")
                     response_payload = {'error': f'Math error: {str(e)}'}
                 
                 out_str = json.dumps(response_payload) + '\n'

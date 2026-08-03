@@ -1,13 +1,13 @@
-#include <WiFi.h>
-#include <WebServer.h>
-#include <DNSServer.h> 
+#include <ESP8266WiFi.h>
+#include <ESP8266WebServer.h>
+#include <DNSServer.h>
 
 const char* ap_ssid = "Cube_Solver"; 
 const char* ap_password = "password123";  
 
 const byte DNS_PORT = 53; 
 DNSServer dnsServer;
-WebServer server(80);
+ESP8266WebServer server(80);
 
 const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
